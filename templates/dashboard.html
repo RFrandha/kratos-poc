@@ -1,0 +1,83 @@
+<!-- file: templates/dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <!-- Link to your existing CSS for a consistent look and feel -->
+    <link rel="stylesheet" href="/static/css/forms.css">
+    <style>
+        .session-details {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            word-wrap: break-word;
+            margin-bottom: 20px;
+        }
+        .session-details h3 {
+            margin-top: 0;
+        }
+        .traits-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .traits-table th, .traits-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .traits-table th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Welcome to Your Dashboard</h2>
+    <p>You are logged in and have an active session.</p>
+
+    <div class="session-details">
+        <h3>Session Information</h3>
+        <p><strong>Session ID:</strong> <code>{{.Session.Id}}</code></p>
+        <p><strong>Identity ID:</strong> <code>{{.Session.Identity.Id}}</code></p>
+        <p><strong>Expires At:</strong> {{.Session.ExpiresAt.Format "Jan 02, 2006 15:04:05 MST"}}</p>
+        <p><strong>Authenticated At:</strong> {{.Session.AuthenticatedAt.Format "Jan 02, 2006 15:04:05 MST"}}</p>
+    </div>
+
+    <div class="session-details">
+        <h3>Your Profile (Traits)</h3>
+        <table class="traits-table">
+            <tr>
+                <th>Trait</th>
+                <th>Value</th>
+            </tr>
+            {{/* Loop through the traits map to display user data */}}
+            {{range $key, $value := .Session.Identity.Traits}}
+            <tr>
+                <td>{{$key}}</td>
+                <td>
+                    {{/* This handles nested data like the 'name' object */}}
+                    {{if eq (printf "%T" $value) "map[string]interface {}"}}
+                    <ul>
+                        {{range $k, $v := $value}}
+                        <li><strong>{{$k}}:</strong> {{$v}}</li>
+                        {{end}}
+                    </ul>
+                    {{else}}
+                    {{$value}}
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </table>
+    </div>
+
+    <div class="nav-links">
+        <a href="/logout">Logout</a>
+        <!-- You can add a link to a settings page here later -->
+        <!-- <a href="/settings">Update Profile</a> -->
+    </div>
+</div>
+</body>
+</html>

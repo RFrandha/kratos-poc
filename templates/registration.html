@@ -1,0 +1,37 @@
+<!-- file: templates/register.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register</title>
+    <!-- Link to external CSS instead of inline styles for better separation -->
+    <link rel="stylesheet" href="/static/css/forms.css">
+</head>
+<body>
+<form action="{{.ActionURL}}" method="POST">
+    <h2>Create Account</h2>
+
+    <!-- The template engine automatically handles HTML escaping -->
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+    <div>
+        <label for="email">E-Mail</label>
+        <input id="email" name="traits.email" type="email" required>
+    </div>
+    <div>
+        <label for="first-name">First Name</label>
+        <input id="first-name" name="traits.name.first" type="text">
+    </div>
+    <div>
+        <label for="last-name">Last Name</label>
+        <input id="last-name" name="traits.name.last" type="text">
+    </div>
+    <div>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required>
+    </div>
+
+    <button type="submit" name="method" value="password">Sign Up</button>
+</form>
+</body>
+</html>
