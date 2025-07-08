@@ -2,26 +2,22 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/lestrrat-go/jwx/jwk"
 	"log"
 	"net/http"
 	"ory-kratos-poc/delivery"
-	"strings"
+	"time"
 
 	ory "github.com/ory/client-go"
 )
-
-// A private type for the context key to prevent collisions. This is a Go best practice.
-type contextKey string
-
-// sessionContextKey is the key used to store the session in the request context.
-const sessionContextKey contextKey = "session"
 
 // App holds the application's dependencies and state, like the router and Ory client.
 type App struct {
 	OryClient *ory.APIClient
 	Router    http.Handler
+	jwksCache *jwk.AutoRefresh
+	jwksURL   string
 }
 
 type ErrorResponse struct {
@@ -42,13 +38,38 @@ func New() (*App, error) {
 
 	oryClient, _ := configureOryClient()
 
+	jwtValidator, jwksUrl := NewJwtValidator()
+
 	app := &App{
 		OryClient: oryClient,
+		jwksCache: jwtValidator,
+		jwksURL:   jwksUrl,
 	}
 
 	app.Router = delivery.NewRouter(app)
 
 	return app, nil
+}
+
+func NewJwtValidator() (*jwk.AutoRefresh, string) {
+	// This logic is moved from the old NewJWTValidator into the App's constructor.
+	jwksURL := "https://auth-stg.virgoku.dev/.well-known/jwks.json"
+
+	ar := jwk.NewAutoRefresh(context.Background())
+
+	// Configure the auto-refresh to fetch the JWKS from the URL.
+	// It will refresh every 1 hour, or if a key is not found (with a min refresh interval of 15 mins).
+	ar.Configure(jwksURL, jwk.WithMinRefreshInterval(15*time.Minute))
+
+	// Trigger the first fetch to ensure keys are available on startup.
+	_, err := ar.Refresh(context.Background(), jwksURL)
+	if err != nil {
+		log.Println(fmt.Errorf("failed to perform initial JWKS fetch from %s: %w", jwksURL, err))
+		return nil, ""
+	}
+	log.Printf("Successfully fetched initial JWKS from %s", jwksURL)
+
+	return ar, jwksURL
 }
 
 // Start runs the HTTP server on the specified port.
@@ -66,50 +87,6 @@ func configureOryClient() (*ory.APIClient, string) {
 		},
 	}
 	return ory.NewAPIClient(conf), "http://127.0.0.1:8080"
-}
-
-// SessionMiddleware validates the user's session by checking against the Ory Kratos API.
-// If the session is valid, it's added to the request context for downstream handlers.
-func (a *App) SessionMiddleware(next http.Handler) http.Handler {
-	// Use http.HandlerFunc for an idiomatic Go middleware.
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-
-		var token string
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-		// Check for a session with Ory Kratos.
-		session, _, err := a.OryClient.FrontendAPI.ToSession(r.Context()).XSessionToken(token).Execute()
-
-		// If there is no session or the session is not active, redirect to login.
-		// This condition is simpler and covers all failure cases.
-		if err != nil || !*session.Active {
-			w.Header().Set("content/type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(ErrorResponse{
-				Error: ErrorDetail{
-					Code:      "UNAUTHORIZED",
-					Message:   "Session Expired",
-					ErrorType: "AUTH_ERROR",
-				},
-			})
-			return
-		}
-
-		// Add the session to the request context using our private key.
-		ctx := context.WithValue(r.Context(), sessionContextKey, session)
-
-		// Serve the next handler with the updated context.
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// GetSessionFromContext is a helper function to safely retrieve the session
-// from the request context. This can be used by any handler.
-func (a *App) GetSessionFromContext(ctx context.Context) (*ory.Session, bool) {
-	session, ok := ctx.Value(sessionContextKey).(*ory.Session)
-	return session, ok
 }
 
 func (a *App) GetOryClient() *ory.APIClient {

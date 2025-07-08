@@ -26,7 +26,6 @@ func NewRouter(deps AppDependencies) http.Handler {
 
 	// --- Public Routes ---
 	r.Get("/", h.homeHandler)
-	r.Get("/.well-known/jwks.json", h.jwksHandler)
 
 	// --- Authentication Routes ---
 	r.Group(func(r chi.Router) {
@@ -46,6 +45,11 @@ func NewRouter(deps AppDependencies) http.Handler {
 		r.Use(deps.SessionMiddleware)
 		r.Get("/dashboard", h.dashboardHandler)
 		r.Get("/success", h.successHandler)
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(deps.JWTSessionMiddleware)
+		r.Get("/success-jwt", h.successJWTHandler)
 	})
 
 	return r

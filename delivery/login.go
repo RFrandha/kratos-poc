@@ -256,11 +256,6 @@ func (h *HTTPEndpoint) nativeLoginSubmitHandlerV2(w http.ResponseWriter, r *http
 		http.Error(w, "Could not create session token", http.StatusInternalServerError)
 		return
 	}
-	sessionRaw, err := json.Marshal(result.Session)
-	if err != nil {
-		return
-	}
-	log.Println(sessionRaw)
 
 	// Call ToSession again, but this time ask for a JWT.
 	tokenizedSession, _, err := h.app.GetOryClient().FrontendAPI.ToSession(r.Context()).

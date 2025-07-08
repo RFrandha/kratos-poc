@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"github.com/golang-jwt/jwt/v4"
 	"net/http"
 
 	ory "github.com/ory/client-go"
@@ -10,11 +11,13 @@ import (
 // AppDependencies defines the contract that the delivery layer (HTTP handlers)
 // expects from the core application layer.
 type AppDependencies interface {
-	// GetOryClient provides access to the Ory Kratos API client.
 	GetOryClient() *ory.APIClient
 
-	// SessionMiddleware provides the middleware to protect routes.
 	SessionMiddleware(next http.Handler) http.Handler
 
+	JWTSessionMiddleware(next http.Handler) http.Handler
+
 	GetSessionFromContext(ctx context.Context) (*ory.Session, bool)
+
+	GetClaimsFromContext(ctx context.Context) (jwt.MapClaims, bool)
 }

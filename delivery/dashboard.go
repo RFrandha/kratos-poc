@@ -59,3 +59,24 @@ func (h *HTTPEndpoint) successHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
+
+func (h *HTTPEndpoint) successJWTHandler(w http.ResponseWriter, r *http.Request) {
+	token, ok := h.app.GetClaimsFromContext(r.Context())
+	if !ok {
+		// For an API endpoint, it's better to return a JSON error than to redirect.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "session not found in context"})
+		return
+	}
+
+	// Create a meaningful JSON response for the API client.
+	response := map[string]interface{}{
+		"status": "success",
+		"claim":  token,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
