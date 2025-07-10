@@ -49,6 +49,7 @@ func NewRouter(deps AppDependencies) http.Handler {
 
 	r.Group(func(r chi.Router) {
 		r.Use(deps.JWTSessionMiddleware)
+		r.Use(deps.AuthenticatedSessionMiddleware)
 		r.Get("/success-jwt", h.successJWTHandler)
 	})
 

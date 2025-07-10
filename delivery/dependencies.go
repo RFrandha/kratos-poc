@@ -20,4 +20,8 @@ type AppDependencies interface {
 	GetSessionFromContext(ctx context.Context) (*ory.Session, bool)
 
 	GetClaimsFromContext(ctx context.Context) (jwt.MapClaims, bool)
+
+	AuthenticatedSessionMiddleware(next http.Handler) http.Handler
+
+	GetOrySessionFromContext(ctx context.Context) (*ory.Session, bool)
 }

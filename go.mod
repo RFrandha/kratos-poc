@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/lestrrat-go/jwx v1.2.31
-	github.com/ory/client-go v1.20.11
+	github.com/ory/client-go v1.16.7
 )
 
 require (

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -113,8 +112,7 @@ func (h *HTTPEndpoint) loginSubmitHandler(w http.ResponseWriter, r *http.Request
 			// Case 2: The error is a generic Kratos error message.
 			// We can extract the details and show them on our error page.
 			if errModel, ok := genericError.Model().(ory.ErrorGeneric); ok {
-				log.Printf("Kratos error during login: ID=%s, Reason=%s\n", errModel.Error.GetId(), errModel.Error.GetMessage())
-				http.Redirect(w, r, fmt.Sprintf("/error?id=%s&reason=%s", url.QueryEscape(errModel.Error.GetId()), url.QueryEscape(errModel.Error.GetMessage())), http.StatusSeeOther)
+				log.Printf("Kratos error during login: Reason=%s\n", errModel.Error.GetMessage())
 				return
 			}
 		}

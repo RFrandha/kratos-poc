@@ -20,6 +20,9 @@ const sessionContextKey contextKey = "session"
 // userClaimsKey is the key used to store the user claims in the request context.
 const userClaimsKey contextKey = "user_claims"
 
+// orySessionContextKey is the key used to store the validated Ory Session in the request context.
+const orySessionContextKey contextKey = "ory_session"
+
 func (a *App) JWTSessionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -136,4 +139,69 @@ func (a *App) SessionMiddleware(next http.Handler) http.Handler {
 func (a *App) GetSessionFromContext(ctx context.Context) (*ory.Session, bool) {
 	session, ok := ctx.Value(sessionContextKey).(*ory.Session)
 	return session, ok
+}
+
+// AuthenticatedSessionMiddleware validates a token and its session status with Ory Kratos.
+// This should be the standard middleware for all protected API routes. It guarantees that
+// the session is active and has not been revoked.
+func (a *App) AuthenticatedSessionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		// We expect the token in the "Bearer <token>" format.
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+
+		// Explicitly check for a missing or malformed token.
+		if token == "" || token == authHeader {
+			a.writeJSONError(w, http.StatusUnauthorized, "Authorization token is required and must be in Bearer format.")
+			return
+		}
+
+		claims, ok := a.GetClaimsFromContext(r.Context())
+		if !ok {
+			a.writeJSONError(w, http.StatusUnauthorized, "Failed to get claims from context.")
+			return
+		}
+
+		sessionID, ok := claims["sid"].(string) // Asserting it's a string
+		if !ok {
+			// Handle case where 'sid' key doesn't exist or is not a string
+			a.writeJSONError(w, http.StatusUnauthorized, "Failed to get session ID from context.")
+			return
+		}
+
+		// This is the most important step.
+		// ToSession validates the token AND checks if the session is active in the Kratos DB.
+		// If a user has logged out, this call will fail.
+		session, _, err := a.OryClientAdmin.IdentityAPI.GetSession(r.Context(), sessionID).
+			Execute()
+
+		// This single, robust check handles all failure cases:
+		// - Invalid token signature/format
+		// - Expired token
+		// - Revoked session (user logged out)
+		if err != nil || (session != nil && !*session.Active) {
+			log.Printf("Session validation failed. Error: %v", err)
+			a.writeJSONError(w, http.StatusUnauthorized, "Session is invalid or has expired.")
+			return
+		}
+
+		// The session is valid and active. Add the rich session object to the context.
+		ctx := context.WithValue(r.Context(), sessionContextKey, session)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// GetOrySessionFromContext is the helper function to retrieve the validated session.
+// Handlers should use this to get user information.
+func (a *App) GetOrySessionFromContext(ctx context.Context) (*ory.Session, bool) {
+	session, ok := ctx.Value(orySessionContextKey).(*ory.Session)
+	return session, ok
+}
+
+// writeJSONError is a helper to standardize JSON error responses.
+func (a *App) writeJSONError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	// In a real app, you might have a more structured error response.
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

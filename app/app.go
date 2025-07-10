@@ -14,10 +14,11 @@ import (
 
 // App holds the application's dependencies and state, like the router and Ory client.
 type App struct {
-	OryClient *ory.APIClient
-	Router    http.Handler
-	jwksCache *jwk.AutoRefresh
-	jwksURL   string
+	OryClient      *ory.APIClient
+	OryClientAdmin *ory.APIClient
+	Router         http.Handler
+	jwksCache      *jwk.AutoRefresh
+	jwksURL        string
 }
 
 type ErrorResponse struct {
@@ -36,14 +37,16 @@ func New() (*App, error) {
 	// Centralize template parsing at startup for efficiency.
 	delivery.ParseAllTemplates()
 
-	oryClient, _ := configureOryClient()
+	oryClient, _ := configureOryClient("http://127.0.0.1:4433")
+	oryClientAdmin, _ := configureOryClient("http://127.0.0.1:4434")
 
 	jwtValidator, jwksUrl := NewJwtValidator()
 
 	app := &App{
-		OryClient: oryClient,
-		jwksCache: jwtValidator,
-		jwksURL:   jwksUrl,
+		OryClient:      oryClient,
+		OryClientAdmin: oryClientAdmin,
+		jwksCache:      jwtValidator,
+		jwksURL:        jwksUrl,
 	}
 
 	app.Router = delivery.NewRouter(app)
@@ -79,13 +82,14 @@ func (a *App) Start(port string) {
 }
 
 // configureOryClient is a helper to set up the connection to Ory Kratos.
-func configureOryClient() (*ory.APIClient, string) {
+func configureOryClient(url string) (*ory.APIClient, string) {
 	conf := ory.NewConfiguration()
 	conf.Servers = ory.ServerConfigurations{
 		{
-			URL: "http://127.0.0.1:4433", // Kratos Public API
+			URL: url, // Kratos Public API
 		},
 	}
+
 	return ory.NewAPIClient(conf), "http://127.0.0.1:8080"
 }
 
