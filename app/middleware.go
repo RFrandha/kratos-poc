@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v4"
 	ory "github.com/ory/client-go"
@@ -86,6 +87,94 @@ func (a *App) JWTSessionMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Use a custom type for the context key to avoid collisions.
+		ctx := context.WithValue(r.Context(), userClaimsKey, token.Claims)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// JWTInsecureClaimExtractionMiddleware parses a JWT without validating its expiration date,
+// but still validates the signature. It is intended for scenarios where you need to
+// access claims from an expired token, for example, to identify a user for a
+// token refresh flow.
+//
+// WARNING: This middleware does NOT validate that the token is not expired.
+// Do not use it to grant access to protected resources. It should only be used
+// for specific endpoints that need to read claims from an expired token.
+func (a *App) JWTInsecureClaimExtractionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			a.writeJSONError(w, http.StatusUnauthorized, "Authorization header required")
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader {
+			a.writeJSONError(w, http.StatusUnauthorized, "Bearer token required")
+			return
+		}
+
+		keyFunc := func(token *jwt.Token) (interface{}, error) {
+			keyID, ok := token.Header["kid"].(string)
+			if !ok {
+				return nil, fmt.Errorf("expecting JWT header to have 'kid'")
+			}
+
+			const privatePrefix = "private:"
+			const publicPrefix = "public:"
+
+			verificationKeyID := keyID
+			// If the key ID from the token has the private prefix, transform it.
+			if strings.HasPrefix(keyID, privatePrefix) {
+				unprefixedID := strings.TrimPrefix(keyID, privatePrefix)
+				verificationKeyID = publicPrefix + unprefixedID
+				log.Printf("Transformed private kid '%s' to public kid '%s' for verification", keyID, verificationKeyID)
+			}
+
+			// Fetch the key set from the App's auto-refreshing cache.
+			keySet, err := a.jwksCache.Fetch(r.Context(), a.jwksURL)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch JWKS: %w", err)
+			}
+
+			key, found := keySet.LookupKeyID(verificationKeyID)
+			if !found {
+				return nil, fmt.Errorf("unable to find key with ID '%s'", verificationKeyID)
+			}
+
+			var pubKey interface{}
+			if err := key.Raw(&pubKey); err != nil {
+				return nil, fmt.Errorf("failed to get raw public key: %w", err)
+			}
+			return pubKey, nil
+		}
+
+		token, err := jwt.Parse(tokenString, keyFunc)
+
+		// The core logic is here. We check for a specific validation error.
+		if err != nil {
+			var validationErr *jwt.ValidationError
+			if errors.As(err, &validationErr) {
+				// The Errors field is a bitmask. We check if it contains any error *other than*
+				// the expiration error. If it does, we fail.
+				if (validationErr.Errors &^ jwt.ValidationErrorExpired) != 0 {
+					log.Printf("Token validation failed with an unforgivable error: %v", err)
+					a.writeJSONError(w, http.StatusUnauthorized, "Invalid token")
+					return
+				}
+				// If we are here, the only error was expiration, which we will ignore.
+				log.Printf("Processing claims from an expired token. Original error: %v", err)
+			}
+		}
+
+		// At this point, the token's signature is valid, but it may be expired.
+		// The claims are available in token.Claims.
+		if token == nil || token.Claims == nil {
+			a.writeJSONError(w, http.StatusUnauthorized, "Unable to parse claims from token")
+			return
+		}
+
+		// Add claims to the context for downstream handlers.
 		ctx := context.WithValue(r.Context(), userClaimsKey, token.Claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

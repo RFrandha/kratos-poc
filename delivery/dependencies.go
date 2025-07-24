@@ -16,6 +16,7 @@ type AppDependencies interface {
 	SessionMiddleware(next http.Handler) http.Handler
 
 	JWTSessionMiddleware(next http.Handler) http.Handler
+	JWTInsecureClaimExtractionMiddleware(next http.Handler) http.Handler
 
 	GetSessionFromContext(ctx context.Context) (*ory.Session, bool)
 
@@ -24,4 +25,6 @@ type AppDependencies interface {
 	AuthenticatedSessionMiddleware(next http.Handler) http.Handler
 
 	GetOrySessionFromContext(ctx context.Context) (*ory.Session, bool)
+
+	GetOryAdminClient() *ory.APIClient
 }

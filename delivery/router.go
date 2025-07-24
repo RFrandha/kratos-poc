@@ -53,5 +53,10 @@ func NewRouter(deps AppDependencies) http.Handler {
 		r.Get("/success-jwt", h.successJWTHandler)
 	})
 
+	r.Group(func(r chi.Router) {
+		r.Use(deps.JWTInsecureClaimExtractionMiddleware)
+		r.Get("/refresh-token", h.refreshToken)
+	})
+
 	return r
 }

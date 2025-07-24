@@ -283,3 +283,55 @@ func (h *HTTPEndpoint) nativeLoginSubmitHandlerV2(w http.ResponseWriter, r *http
 		log.Println("Error encoding JWT success response:", err)
 	}
 }
+
+func (h *HTTPEndpoint) refreshToken(w http.ResponseWriter, r *http.Request) {
+	claim, ok := h.app.GetClaimsFromContext(r.Context())
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	sessionID, ok := claim["sid"].(string)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	resp, httpResp, err := h.app.GetOryAdminClient().IdentityAPI.ExtendSession(r.Context(), sessionID).Execute()
+	if err != nil && httpResp != nil {
+		log.Println(httpResp.StatusCode, err)
+		return
+	}
+	if resp == nil {
+		return
+	}
+
+	//// Call ToSession again, but this time ask for a JWT.
+	//tokenizedSession, _, err := h.app.GetOryClient().FrontendAPI.ToSession(r.Context()).
+	//	XSessionToken(*resp.).
+	//	TokenizeAs("jwt_v1"). // Use the template name from kratos.yml
+	//	Execute()
+	//
+	//if err != nil {
+	//	log.Printf("CRITICAL: Failed to exchange Kratos session for JWT: %v", err)
+	//	http.Error(w, "Could not create session token", http.StatusInternalServerError)
+	//	return
+	//}
+	//
+	//if !tokenizedSession.HasTokenized() {
+	//	log.Println("CRITICAL: Kratos did not return a tokenized session.")
+	//	http.Error(w, "Could not create session token", http.StatusInternalServerError)
+	//	return
+	//}
+
+	response := map[string]string{
+		"jwt": resp.GetTokenized(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Println("Error encoding JWT success response:", err)
+	}
+}

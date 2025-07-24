@@ -96,3 +96,5 @@ func configureOryClient(url string) (*ory.APIClient, string) {
 func (a *App) GetOryClient() *ory.APIClient {
 	return a.OryClient
 }
+
+func (a *App) GetOryAdminClient() *ory.APIClient { return a.OryClientAdmin }
